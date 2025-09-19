@@ -1,5 +1,5 @@
 import { App, TFile, MarkdownRenderer, Notice, Component } from 'obsidian';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
 import { dirname, join } from 'path';
 import * as micromatch from 'micromatch';
 import { HtmlExportSettings } from '../types/settings';
@@ -63,6 +63,9 @@ export class HtmlExportService {
 
 			// Build link mappings for all files that will be exported
 			this.linkResolver.buildPathMappings(allExportFiles);
+
+			// Collect and copy all image assets
+			await this.copyImageAssets(allExportFiles);
 
 			let exportedCount = 0;
 
@@ -164,6 +167,48 @@ export class HtmlExportService {
 
 		} catch (error) {
 			throw new Error(`Error exporting file ${file.path}: ${(error as Error).message}`);
+		}
+	}
+
+	private async copyImageAssets(files: TFile[]): Promise<void> {
+		try {
+			const allImageFiles = new Set<TFile>();
+
+			// Collect all image references from all markdown files
+			for (const file of files) {
+				const content = await this.app.vault.read(file);
+				const imageRefs = this.linkResolver.getAllImageReferences(content, file.path);
+
+				for (const imageFile of imageRefs) {
+					allImageFiles.add(imageFile);
+				}
+			}
+
+			if (allImageFiles.size === 0) {
+				return; // No images to copy
+			}
+
+			// Create assets directory
+			const assetsDir = join(this.settings.exportPath, 'assets');
+			if (!existsSync(assetsDir)) {
+				mkdirSync(assetsDir, { recursive: true });
+			}
+
+			// Copy each image file
+			for (const imageFile of allImageFiles) {
+				const sourceBuffer = await this.app.vault.readBinary(imageFile);
+				const targetPath = join(assetsDir, imageFile.name);
+
+				// Write binary data to target location
+				writeFileSync(targetPath, Buffer.from(sourceBuffer));
+			}
+
+			if (allImageFiles.size > 0) {
+				console.log(`Copied ${allImageFiles.size} image assets to ${assetsDir}`);
+			}
+
+		} catch (error) {
+			throw new Error(`Error copying image assets: ${(error as Error).message}`);
 		}
 	}
 }

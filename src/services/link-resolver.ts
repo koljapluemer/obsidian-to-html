@@ -56,12 +56,15 @@ export class LinkResolver {
 		return this.exportedFiles.has(filePath);
 	}
 
-	// Convert internal links in markdown content to proper markdown links BEFORE rendering
+	// Convert internal links and images in markdown content BEFORE rendering
 	processLinksInMarkdown(markdownContent: string, sourcePath: string): string {
-		// Match Obsidian internal links: [[link]] or [[link|display text]]
+		// First, process image embeds: ![[image.jpg]] or ![[image.jpg|width]] or ![[image.jpg|alt|width]]
+		let processedContent = this.processImagesInMarkdown(markdownContent, sourcePath);
+
+		// Then process text links: [[link]] or [[link|display text]]
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
 
-		return markdownContent.replace(linkRegex, (match, linkContent) => {
+		return processedContent.replace(linkRegex, (match, linkContent) => {
 			const parts = linkContent.split('|');
 			const linkText = parts[0].trim();
 			const displayText = parts[1]?.trim() || linkText.split('#')[0]; // Use link text without subpath if no display text
@@ -95,6 +98,105 @@ export class LinkResolver {
 			// If link can't be resolved, mark as broken with custom scheme
 			return `[${displayText}](obsidian-broken:${encodeURIComponent(linkText)})`;
 		});
+	}
+
+	// Process image embeds in markdown content
+	processImagesInMarkdown(markdownContent: string, sourcePath: string): string {
+		// Match Obsidian image embeds: ![[image.jpg]] or ![[image.jpg|params]]
+		const imageRegex = /!\[\[([^\]]+)\]\]/g;
+
+		return markdownContent.replace(imageRegex, (match, imageContent) => {
+			const parts = imageContent.split('|').map((p: string) => p.trim());
+			const imagePath = parts[0];
+
+			// Parse parameters: can be width-only, alt-only, or alt|width
+			let altText = '';
+			let width: number | undefined;
+
+			if (parts.length > 1) {
+				for (let i = 1; i < parts.length; i++) {
+					const param = parts[i];
+					// Check if parameter is a number (width)
+					const numParam = parseInt(param);
+					if (!isNaN(numParam) && numParam > 0) {
+						width = numParam;
+					} else {
+						// Treat as alt text
+						altText = param;
+					}
+				}
+			}
+
+			// Resolve the image file
+			const imageFile = this.resolveImagePath(imagePath, sourcePath);
+
+			if (imageFile) {
+				return this.generateImageHtml(imageFile, sourcePath, width, altText);
+			}
+
+			// If image can't be resolved, return broken image placeholder
+			return `<span class="broken-image" title="Image not found: ${imagePath}">🖼️ ${imagePath}</span>`;
+		});
+	}
+
+	// Resolve image path to actual file
+	resolveImagePath(imagePath: string, sourcePath: string): TFile | null {
+		// Use Obsidian's API to resolve the image path
+		const imageFile = this.app.metadataCache.getFirstLinkpathDest(imagePath, sourcePath);
+
+		if (imageFile instanceof TFile) {
+			// Check if it's actually an image file
+			const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif'];
+			const hasImageExt = imageExtensions.some(ext =>
+				imageFile.path.toLowerCase().endsWith(ext)
+			);
+
+			if (hasImageExt) {
+				return imageFile;
+			}
+		}
+
+		return null;
+	}
+
+	// Generate HTML for an image
+	generateImageHtml(imageFile: TFile, sourcePath: string, width?: number, altText?: string): string {
+		// Create relative path to the image in the assets folder
+		const imageName = imageFile.name;
+		const relativeImagePath = this.getRelativePath(sourcePath, `assets/${imageName}`);
+
+		// Use provided alt text or fall back to filename without extension
+		const alt = altText || imageFile.basename;
+
+		// Build the img tag
+		let imgTag = `<img src="${relativeImagePath}" alt="${alt}"`;
+
+		// Add width styling if specified
+		if (width && width > 0) {
+			imgTag += ` style="width: ${width}px;"`;
+		}
+
+		imgTag += '>';
+
+		return imgTag;
+	}
+
+	// Get all image references from markdown content
+	getAllImageReferences(markdownContent: string, sourcePath: string): TFile[] {
+		const imageRegex = /!\[\[([^\]]+)\]\]/g;
+		const imageFiles: TFile[] = [];
+		let match;
+
+		while ((match = imageRegex.exec(markdownContent)) !== null) {
+			const imagePath = match[1].split('|')[0].trim();
+			const imageFile = this.resolveImagePath(imagePath, sourcePath);
+
+			if (imageFile && !imageFiles.some(f => f.path === imageFile.path)) {
+				imageFiles.push(imageFile);
+			}
+		}
+
+		return imageFiles;
 	}
 
 	// Post-process HTML to convert broken link anchors to styled spans
