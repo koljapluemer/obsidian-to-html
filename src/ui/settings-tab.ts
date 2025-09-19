@@ -19,6 +19,7 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 
 		this.createExportPathSetting(containerEl);
 		this.createIncludePatternsSetting(containerEl);
+		this.createOnlyIncludeNotesContainingSetting(containerEl);
 		this.createIndexPageSetting(containerEl);
 		this.createTemplateNoteSetting(containerEl);
 	}
@@ -56,6 +57,19 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.includePatterns)
 				.onChange(async (value) => {
 					this.plugin.settings.includePatterns = value;
+					await this.plugin.saveSettings();
+				}));
+	}
+
+	private createOnlyIncludeNotesContainingSetting(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName('Only include notes containing string')
+			.setDesc('Only export notes that contain this exact string (searches entire note including frontmatter). Leave empty to export all matching files.')
+			.addText(text => text
+				.setPlaceholder('published: true')
+				.setValue(this.plugin.settings.onlyIncludeNotesContaining)
+				.onChange(async (value) => {
+					this.plugin.settings.onlyIncludeNotesContaining = value;
 					await this.plugin.saveSettings();
 				}));
 	}
@@ -115,7 +129,7 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 				.setTooltip('Create and use default template')
 				.onClick(async () => {
 					// This will be implemented in the command
-					await (this.plugin as any).createDefaultTemplate();
+					await (this.plugin as HtmlExportPlugin).createDefaultTemplate();
 					this.display(); // Refresh the display
 				}))
 			.addButton(button => button

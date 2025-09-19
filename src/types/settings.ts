@@ -3,11 +3,13 @@ export interface HtmlExportSettings {
 	includePatterns: string;
 	indexPage: string;
 	templateNote: string;
+	onlyIncludeNotesContaining: string;
 }
 
 export const DEFAULT_SETTINGS: HtmlExportSettings = {
 	exportPath: '',
 	includePatterns: '**/*.md',
 	indexPage: '',
-	templateNote: ''
+	templateNote: '',
+	onlyIncludeNotesContaining: ''
 };

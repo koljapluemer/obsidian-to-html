@@ -45,7 +45,7 @@ export class HtmlExportService {
 			const templateContent = await this.app.vault.read(templateFile);
 
 			const files = this.getMarkdownFiles();
-			const filteredFiles = this.filterFilesByGlob(files);
+			const filteredFiles = await this.filterFilesByGlob(files);
 
 			// Collect all files that will be exported (including index page)
 			const allExportFiles = [...filteredFiles];
@@ -103,7 +103,7 @@ export class HtmlExportService {
 		return this.app.vault.getMarkdownFiles();
 	}
 
-	private filterFilesByGlob(files: TFile[]): TFile[] {
+	private async filterFilesByGlob(files: TFile[]): Promise<TFile[]> {
 		if (!this.settings.includePatterns.trim()) {
 			return files;
 		}
@@ -113,9 +113,30 @@ export class HtmlExportService {
 			.map(p => p.trim())
 			.filter(p => p.length > 0);
 
-		return files.filter(file => {
+		const globFiltered = files.filter(file => {
 			return micromatch.isMatch(file.path, patterns);
 		});
+
+		// If no content filter is specified, return glob-filtered results
+		if (!this.settings.onlyIncludeNotesContaining.trim()) {
+			return globFiltered;
+		}
+
+		// Apply content filtering
+		const contentFiltered: TFile[] = [];
+		for (const file of globFiltered) {
+			try {
+				const content = await this.app.vault.read(file);
+				if (content.includes(this.settings.onlyIncludeNotesContaining)) {
+					contentFiltered.push(file);
+				}
+			} catch (error) {
+				// Skip files that can't be read
+				console.warn(`Could not read file ${file.path} for content filtering: ${(error as Error).message}`);
+			}
+		}
+
+		return contentFiltered;
 	}
 
 	private async exportFileToHtml(file: TFile, templateContent: string, customFileName?: string): Promise<string> {
@@ -248,7 +269,8 @@ export class HtmlExportService {
 		const directories: string[] = [this.settings.exportPath];
 
 		while (directories.length > 0) {
-			const currentDir = directories.pop()!;
+			const currentDir = directories.pop();
+			if (!currentDir) continue;
 			const entries = readdirSync(currentDir, { withFileTypes: true });
 
 			for (const entry of entries) {

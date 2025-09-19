@@ -5,7 +5,7 @@ export interface NoteTemplateData {
 	note: {
 		title: string;
 		content: string;
-		frontmatter: Record<string, any>;
+		frontmatter: Record<string, unknown>;
 	};
 }
 
@@ -50,7 +50,7 @@ export class TemplateService {
 	}
 
 	// Extract frontmatter from a file
-	extractFrontmatter(file: TFile): Record<string, any> {
+	extractFrontmatter(file: TFile): Record<string, unknown> {
 		const cache = this.app.metadataCache.getFileCache(file);
 		return cache?.frontmatter || {};
 	}

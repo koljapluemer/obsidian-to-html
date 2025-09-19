@@ -61,7 +61,7 @@ export class LinkResolver {
 	// Convert internal links and images in markdown content BEFORE rendering
 	processLinksInMarkdown(markdownContent: string, sourcePath: string): string {
 		// First, process media embeds: ![[image.jpg]] or ![[video.mp4|width]] etc.
-		let processedContent = this.processMediaEmbedsInMarkdown(markdownContent, sourcePath);
+		const processedContent = this.processMediaEmbedsInMarkdown(markdownContent, sourcePath);
 
 		// Then process text links: [[link]] or [[link|display text]]
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
