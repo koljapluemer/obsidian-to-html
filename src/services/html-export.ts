@@ -4,18 +4,21 @@ import { dirname, join } from 'path';
 import * as micromatch from 'micromatch';
 import { HtmlExportSettings } from '../types/settings';
 import { LinkResolver } from './link-resolver';
+import { TemplateService } from './template-service';
 
 export class HtmlExportService {
 	private app: App;
 	private settings: HtmlExportSettings;
 	private component: Component;
 	private linkResolver: LinkResolver;
+	private templateService: TemplateService;
 
 	constructor(app: App, settings: HtmlExportSettings, component: Component) {
 		this.app = app;
 		this.settings = settings;
 		this.component = component;
 		this.linkResolver = new LinkResolver(app);
+		this.templateService = new TemplateService(app);
 	}
 
 	async exportVault(): Promise<void> {
@@ -24,9 +27,23 @@ export class HtmlExportService {
 			return;
 		}
 
+		if (!this.settings.templateNote) {
+			new Notice('Please select a template note in settings first');
+			return;
+		}
+
 		new Notice('HTML export started...');
 
 		try {
+			// Load the template first
+			const templateFile = this.app.vault.getAbstractFileByPath(this.settings.templateNote);
+			if (!(templateFile instanceof TFile)) {
+				new Notice('Template note not found. Please select a valid template.');
+				return;
+			}
+
+			const templateContent = await this.app.vault.read(templateFile);
+
 			const files = this.getMarkdownFiles();
 			const filteredFiles = this.filterFilesByGlob(files);
 
@@ -54,9 +71,9 @@ export class HtmlExportService {
 				const isIndexPage = this.settings.indexPage && file.path === this.settings.indexPage;
 
 				if (isIndexPage) {
-					await this.exportFileToHtml(file, 'index.html');
+					await this.exportFileToHtml(file, templateContent, 'index.html');
 				} else {
-					await this.exportFileToHtml(file);
+					await this.exportFileToHtml(file, templateContent);
 				}
 				exportedCount++;
 			}
@@ -65,7 +82,7 @@ export class HtmlExportService {
 			if (this.settings.indexPage) {
 				const indexFile = this.app.vault.getAbstractFileByPath(this.settings.indexPage);
 				if (indexFile instanceof TFile && !filteredFiles.includes(indexFile)) {
-					await this.exportFileToHtml(indexFile, 'index.html');
+					await this.exportFileToHtml(indexFile, templateContent, 'index.html');
 					exportedCount++;
 				}
 			}
@@ -95,7 +112,7 @@ export class HtmlExportService {
 		});
 	}
 
-	private async exportFileToHtml(file: TFile, customFileName?: string): Promise<void> {
+	private async exportFileToHtml(file: TFile, templateContent: string, customFileName?: string): Promise<void> {
 		try {
 			const content = await this.app.vault.read(file);
 
@@ -116,8 +133,11 @@ export class HtmlExportService {
 			// Post-process HTML to convert broken link anchors to styled spans
 			const processedHtml = this.linkResolver.processDeadLinksInHtml(tempDiv.innerHTML);
 
-			// Get the final HTML content
-			const htmlContent = this.wrapInHtmlTemplate(processedHtml, file.basename);
+			// Create note data for template
+			const noteData = this.templateService.createNoteData(file, processedHtml);
+
+			// Render with the template
+			const htmlContent = await this.templateService.renderTemplate(templateContent, noteData);
 
 			// Calculate output path
 			let outputPath: string;
@@ -145,55 +165,5 @@ export class HtmlExportService {
 		} catch (error) {
 			throw new Error(`Error exporting file ${file.path}: ${(error as Error).message}`);
 		}
-	}
-
-	private wrapInHtmlTemplate(content: string, title: string): string {
-		return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            color: #333;
-        }
-        h1, h2, h3, h4, h5, h6 {
-            margin-top: 1.5em;
-            margin-bottom: 0.5em;
-        }
-        code {
-            background-color: #f4f4f4;
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
-        pre {
-            background-color: #f4f4f4;
-            padding: 10px;
-            border-radius: 5px;
-            overflow-x: auto;
-        }
-        blockquote {
-            border-left: 4px solid #ddd;
-            margin: 0;
-            padding-left: 20px;
-            color: #666;
-        }
-        .dead-link {
-            color: #0645ad; /* Wikipedia link blue */
-            text-decoration: line-through;
-            cursor: default; /* No pointer cursor */
-        }
-    </style>
-</head>
-<body>
-    ${content}
-</body>
-</html>`;
 	}
 }

@@ -20,6 +20,7 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 		this.createExportPathSetting(containerEl);
 		this.createIncludePatternsSetting(containerEl);
 		this.createIndexPageSetting(containerEl);
+		this.createTemplateNoteSetting(containerEl);
 	}
 
 	private createExportPathSetting(containerEl: HTMLElement): void {
@@ -84,6 +85,44 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 				.setTooltip('Clear index page selection')
 				.onClick(async () => {
 					this.plugin.settings.indexPage = '';
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the display
+				}));
+	}
+
+	private createTemplateNoteSetting(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName('Template Note')
+			.setDesc('Select a note to use as HTML template (required for export)')
+			.addText(text => {
+				text
+					.setPlaceholder('Click button to select...')
+					.setValue(this.plugin.settings.templateNote)
+					.setDisabled(true);
+			})
+			.addButton(button => button
+				.setButtonText('Select Template')
+				.setTooltip('Choose a template note')
+				.onClick(() => {
+					new IndexPageSuggestModal(this.app, (selectedFile) => {
+						this.plugin.settings.templateNote = selectedFile.path;
+						this.plugin.saveSettings();
+						this.display(); // Refresh the display to show selected file
+					}).open();
+				}))
+			.addButton(button => button
+				.setButtonText('Add Default')
+				.setTooltip('Create and use default template')
+				.onClick(async () => {
+					// This will be implemented in the command
+					await (this.plugin as any).createDefaultTemplate();
+					this.display(); // Refresh the display
+				}))
+			.addButton(button => button
+				.setButtonText('Clear')
+				.setTooltip('Clear template selection')
+				.onClick(async () => {
+					this.plugin.settings.templateNote = '';
 					await this.plugin.saveSettings();
 					this.display(); // Refresh the display
 				}));
