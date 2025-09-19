@@ -1,5 +1,5 @@
 import { App, TFile, MarkdownRenderer, Notice, Component } from 'obsidian';
-import { writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import * as micromatch from 'micromatch';
 import { HtmlExportSettings } from '../types/settings';
@@ -68,16 +68,16 @@ export class HtmlExportService {
 			await this.copyMediaAssets(allExportFiles);
 
 			let exportedCount = 0;
+			const exportedHtmlPaths = new Set<string>();
 
 			// Export filtered files
 			for (const file of filteredFiles) {
 				const isIndexPage = this.settings.indexPage && file.path === this.settings.indexPage;
 
-				if (isIndexPage) {
-					await this.exportFileToHtml(file, templateContent, 'index.html');
-				} else {
-					await this.exportFileToHtml(file, templateContent);
-				}
+				const outputPath = isIndexPage
+					? await this.exportFileToHtml(file, templateContent, 'index.html')
+					: await this.exportFileToHtml(file, templateContent);
+				exportedHtmlPaths.add(outputPath);
 				exportedCount++;
 			}
 
@@ -85,10 +85,13 @@ export class HtmlExportService {
 			if (this.settings.indexPage) {
 				const indexFile = this.app.vault.getAbstractFileByPath(this.settings.indexPage);
 				if (indexFile instanceof TFile && !filteredFiles.includes(indexFile)) {
-					await this.exportFileToHtml(indexFile, templateContent, 'index.html');
+					const outputPath = await this.exportFileToHtml(indexFile, templateContent, 'index.html');
+					exportedHtmlPaths.add(outputPath);
 					exportedCount++;
 				}
 			}
+
+			this.removeStaleHtmlFiles(exportedHtmlPaths);
 
 			new Notice(`HTML export completed! Exported ${exportedCount} files.`);
 		} catch (error) {
@@ -115,7 +118,7 @@ export class HtmlExportService {
 		});
 	}
 
-	private async exportFileToHtml(file: TFile, templateContent: string, customFileName?: string): Promise<void> {
+	private async exportFileToHtml(file: TFile, templateContent: string, customFileName?: string): Promise<string> {
 		try {
 			const content = await this.app.vault.read(file);
 
@@ -167,6 +170,8 @@ export class HtmlExportService {
 
 			// Write the file using Node.js fs for true filesystem access
 			writeFileSync(outputPath, htmlContent, 'utf8');
+
+			return outputPath;
 
 		} catch (error) {
 			throw new Error(`Error exporting file ${file.path}: ${(error as Error).message}`);
@@ -231,6 +236,56 @@ export class HtmlExportService {
 
 		} catch (error) {
 			throw new Error(`Error copying media assets: ${(error as Error).message}`);
+		}
+	}
+
+	private removeStaleHtmlFiles(exportedHtmlPaths: Set<string>): void {
+		if (!existsSync(this.settings.exportPath)) {
+			return;
+		}
+
+		const staleFiles: string[] = [];
+		const directories: string[] = [this.settings.exportPath];
+
+		while (directories.length > 0) {
+			const currentDir = directories.pop()!;
+			const entries = readdirSync(currentDir, { withFileTypes: true });
+
+			for (const entry of entries) {
+				const fullPath = join(currentDir, entry.name);
+
+				if (entry.isDirectory()) {
+					if (entry.name === 'assets') {
+						continue;
+					}
+					directories.push(fullPath);
+					continue;
+				}
+
+				if (!entry.isFile()) {
+					continue;
+				}
+
+				if (!entry.name.toLowerCase().endsWith('.html')) {
+					continue;
+				}
+
+				if (!exportedHtmlPaths.has(fullPath)) {
+					staleFiles.push(fullPath);
+				}
+			}
+		}
+
+		for (const filePath of staleFiles) {
+			try {
+				unlinkSync(filePath);
+			} catch (error) {
+				console.warn(`Failed to remove stale file ${filePath}: ${(error as Error).message}`);
+			}
+		}
+
+		if (staleFiles.length > 0) {
+			console.log(`Removed ${staleFiles.length} stale HTML files from ${this.settings.exportPath}`);
 		}
 	}
 }

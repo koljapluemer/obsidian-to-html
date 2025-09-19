@@ -16,6 +16,7 @@ Export your Obsidian vault to static HTML files with full image support and link
 - Convert `![[image.jpg]]` and `![[video.mp4]]` to proper HTML with width support (`![[media|400]]`)
 - Convert `[[note links]]` to relative HTML links
 - Copy only referenced media (images & video) to output
+- Prune stale `.html` files from the export folder on each run
 - Customizable HTML templates using Handlebars
 - GitHub Pages ready output
 
@@ -37,6 +38,8 @@ Export your Obsidian vault to static HTML files with full image support and link
 3. **Export**: Run command "Export vault to HTML"
 
 **Tip**: To verify media export, create a note with both an image embed (`![[image.png|Alt text|300]]`) and a video embed (`![[clip.mp4|640]]`), then use "Export vault to HTML" and open the generated HTML to confirm the image renders and the video plays with controls.
+
+**Warning**: Every export removes `.html` files inside the export path that weren't regenerated in the current run (the plugin skips the `assets/` folder). Keep any hand-authored HTML outside of the export directory if you don't want it deleted.
 
 ## GitHub Pages Deployment
 
