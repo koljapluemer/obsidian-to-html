@@ -133,6 +133,9 @@ export class HtmlExportService {
 				this.component
 			);
 
+			// Strip target attributes added by renderer so links open in same tab
+			this.removeNewTabTargets(tempDiv);
+
 			// Post-process HTML to convert broken link anchors to styled spans
 			const processedHtml = this.linkResolver.processDeadLinksInHtml(tempDiv.innerHTML);
 
@@ -168,6 +171,25 @@ export class HtmlExportService {
 		} catch (error) {
 			throw new Error(`Error exporting file ${file.path}: ${(error as Error).message}`);
 		}
+	}
+
+	private removeNewTabTargets(container: HTMLElement): void {
+		const anchors = container.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]');
+		anchors.forEach(anchor => {
+			anchor.removeAttribute('target');
+			const rel = anchor.getAttribute('rel');
+			if (rel) {
+				const filtered = rel
+					.split(' ')
+					.map(token => token.trim())
+					.filter(token => token.length > 0 && token.toLowerCase() !== 'noopener' && token.toLowerCase() !== 'noreferrer');
+				if (filtered.length > 0) {
+					anchor.setAttribute('rel', filtered.join(' '));
+				} else {
+					anchor.removeAttribute('rel');
+				}
+			}
+		});
 	}
 
 	private async copyMediaAssets(files: TFile[]): Promise<void> {
