@@ -3,16 +3,19 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import * as micromatch from 'micromatch';
 import { HtmlExportSettings } from '../types/settings';
+import { LinkResolver } from './link-resolver';
 
 export class HtmlExportService {
 	private app: App;
 	private settings: HtmlExportSettings;
 	private component: Component;
+	private linkResolver: LinkResolver;
 
 	constructor(app: App, settings: HtmlExportSettings, component: Component) {
 		this.app = app;
 		this.settings = settings;
 		this.component = component;
+		this.linkResolver = new LinkResolver(app);
 	}
 
 	async exportVault(): Promise<void> {
@@ -27,10 +30,22 @@ export class HtmlExportService {
 			const files = this.getMarkdownFiles();
 			const filteredFiles = this.filterFilesByGlob(files);
 
-			if (filteredFiles.length === 0 && !this.settings.indexPage) {
-				new Notice('No files match the include patterns');
+			// Collect all files that will be exported (including index page)
+			const allExportFiles = [...filteredFiles];
+			if (this.settings.indexPage) {
+				const indexFile = this.app.vault.getAbstractFileByPath(this.settings.indexPage);
+				if (indexFile instanceof TFile && !filteredFiles.includes(indexFile)) {
+					allExportFiles.push(indexFile);
+				}
+			}
+
+			if (allExportFiles.length === 0) {
+				new Notice('No files to export');
 				return;
 			}
+
+			// Build link mappings for all files that will be exported
+			this.linkResolver.buildPathMappings(allExportFiles);
 
 			let exportedCount = 0;
 
@@ -84,19 +99,25 @@ export class HtmlExportService {
 		try {
 			const content = await this.app.vault.read(file);
 
+			// Process internal links in the raw markdown BEFORE rendering
+			const processedMarkdown = this.linkResolver.processLinksInMarkdown(content, file.path);
+
 			// Create a temporary div for rendering
 			const tempDiv = document.createElement('div');
 
-			// Use Obsidian's markdown renderer
+			// Use Obsidian's markdown renderer on the processed markdown
 			await MarkdownRenderer.renderMarkdown(
-				content,
+				processedMarkdown,
 				tempDiv,
 				file.path,
 				this.component
 			);
 
-			// Get the HTML content
-			const htmlContent = this.wrapInHtmlTemplate(tempDiv.innerHTML, file.basename);
+			// Post-process HTML to convert broken link anchors to styled spans
+			const processedHtml = this.linkResolver.processDeadLinksInHtml(tempDiv.innerHTML);
+
+			// Get the final HTML content
+			const htmlContent = this.wrapInHtmlTemplate(processedHtml, file.basename);
 
 			// Calculate output path
 			let outputPath: string;
@@ -105,9 +126,9 @@ export class HtmlExportService {
 				// Use custom filename (e.g., index.html) in export root
 				outputPath = join(this.settings.exportPath, customFileName);
 			} else {
-				// Use normal path mapping
-				const relativePath = file.path;
-				const outputFileName = relativePath.replace(/\.md$/, '.html');
+				// Use slugified path mapping
+				const sluggedPath = this.linkResolver.getSluggedPath(file.path);
+				const outputFileName = sluggedPath.replace(/\.md$/, '.html');
 				outputPath = join(this.settings.exportPath, outputFileName);
 			}
 
@@ -162,6 +183,11 @@ export class HtmlExportService {
             margin: 0;
             padding-left: 20px;
             color: #666;
+        }
+        .dead-link {
+            color: #0645ad; /* Wikipedia link blue */
+            text-decoration: line-through;
+            cursor: default; /* No pointer cursor */
         }
     </style>
 </head>
