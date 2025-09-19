@@ -1,6 +1,14 @@
 # Obsidian to HTML
 
+<<<<<<< HEAD
 Export your Obsidian vault to static HTML files with embedded media (images & video) support and link resolution.
+=======
+
+https://github.com/user-attachments/assets/bf1bf917-cbe3-4120-a6df-5ed2dcd77346
+
+
+Export your Obsidian vault to static HTML files with full image support and link resolution.
+>>>>>>> 90e71d5f5d41417ce18bd0dafe08b479874b93ee
 
 ## Features
 
