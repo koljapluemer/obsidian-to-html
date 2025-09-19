@@ -13,7 +13,7 @@ Export your Obsidian vault to static HTML files with full image support and link
 
 ## Installation
 
-1. Download the latest release files: `main.js`, `manifest.json`, `styles.css`
+1. Download the latest release files: `main.js`, `manifest.json`
 2. Create folder: `VaultFolder/.obsidian/plugins/obsidian-to-html/`
 3. Copy files to that folder
 4. Restart Obsidian and enable the plugin
@@ -21,7 +21,7 @@ Export your Obsidian vault to static HTML files with full image support and link
 ## Usage
 
 1. **Create template**: Run command "Add default template note" or create your own HTML template with `{{note.title}}` and `{{{note.content}}}` placeholders
-2. **Configure export**:
+2. **Configure export** (in Settings):
    - Set export path (e.g., `/Users/you/Sites/my-vault`)
    - Select template note
    - Set include patterns (e.g., `posts/**/*.md`, `public/**/*.md`)
@@ -41,23 +41,6 @@ cd your-vault-site
 - **Export path**: Set to your local repository folder
 - **Include patterns**: Select which folders to publish (e.g., `posts/**/*.md`)
 - **Index page**: Choose your main page (becomes `index.html`)
-
-### 3. Template Setup
-Your HTML template should include:
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{note.title}}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/light.css">
-</head>
-<body>
-    <h1>{{note.title}}</h1>
-    {{{note.content}}}
-</body>
-</html>
-```
 
 ### 4. GitHub Pages Configuration
 1. **Push exported files**:
@@ -86,20 +69,6 @@ git commit -m "Update site content"
 git push origin main
 ```
 
-## File Structure
-```
-export-folder/
-├── index.html          # Your index page
-├── assets/             # Images and media
-│   ├── image1.png
-│   └── diagram.svg
-├── posts/              # Exported notes (maintaining folder structure)
-│   ├── my-post.html
-│   └── another-post.html
-└── projects/
-    └── project-notes.html
-```
-
 ## Troubleshooting
 
 **Images not loading**: Open exported HTML files in a web browser, not in Obsidian. For local testing, use a simple HTTP server:
@@ -118,3 +87,8 @@ python -m http.server 8000
 - `{{note.title}}` - Note filename without extension
 - `{{{note.content}}}` - Rendered HTML content (use triple braces for unescaped HTML)
 - `{{note.frontmatter.property}}` - Access YAML frontmatter properties
+
+
+## Credits
+
+Based on the excellent [obsidian-sample-plugin](github.com/obsidianmd/obsidian-sample-plugin).
