@@ -3,7 +3,7 @@
 	"name": "Obsidian to HTML",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Export your Obsidian vault to HTML files with configurable folder selection using glob patterns.",
+	"description": "Export Obsidian vault to static HTML files with image support, link resolution, and configurable file selection for GitHub Pages deployment.",
 	"author": "",
 	"authorUrl": "",
 	"isDesktopOnly": true
