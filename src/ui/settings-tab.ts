@@ -20,6 +20,7 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 		this.createExportPathSetting(containerEl);
 		this.createIncludePatternsSetting(containerEl);
 		this.createOnlyIncludeNotesContainingSetting(containerEl);
+		this.createExcludeLastHorizontalRuleSetting(containerEl);
 		this.createIndexPageSetting(containerEl);
 		this.createTemplateNoteSetting(containerEl);
 	}
@@ -70,6 +71,18 @@ export class HtmlExportSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.onlyIncludeNotesContaining)
 				.onChange(async (value) => {
 					this.plugin.settings.onlyIncludeNotesContaining = value;
+					await this.plugin.saveSettings();
+				}));
+	}
+
+	private createExcludeLastHorizontalRuleSetting(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName('Exclude last \'---\' section')
+			.setDesc('Remove everything after the last horizontal rule (---) in note content. Frontmatter sections are ignored.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.excludeLastHorizontalRule)
+				.onChange(async (value) => {
+					this.plugin.settings.excludeLastHorizontalRule = value;
 					await this.plugin.saveSettings();
 				}));
 	}

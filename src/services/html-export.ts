@@ -143,8 +143,13 @@ export class HtmlExportService {
 		try {
 			const content = await this.app.vault.read(file);
 
+			// Apply last horizontal rule exclusion if enabled
+			const processedContent = this.settings.excludeLastHorizontalRule
+				? this.processLastHorizontalRuleExclusion(content)
+				: content;
+
 			// Process internal links in the raw markdown BEFORE rendering
-			const processedMarkdown = this.linkResolver.processLinksInMarkdown(content, file.path);
+			const processedMarkdown = this.linkResolver.processLinksInMarkdown(processedContent, file.path);
 
 			// Create a temporary div for rendering
 			const tempDiv = document.createElement('div');
@@ -309,5 +314,70 @@ export class HtmlExportService {
 		if (staleFiles.length > 0) {
 			console.log(`Removed ${staleFiles.length} stale HTML files from ${this.settings.exportPath}`);
 		}
+	}
+
+	private processLastHorizontalRuleExclusion(content: string): string {
+		// Step 1: Detect and extract frontmatter
+		const frontmatterMatch = content.match(/^---\r?\n(.*?)\r?\n---\r?\n/s);
+		let frontmatter = '';
+		let bodyContent = content;
+
+		if (frontmatterMatch) {
+			frontmatter = frontmatterMatch[0];
+			bodyContent = content.slice(frontmatterMatch[0].length);
+		}
+
+		// Step 2: Find last '---' in body content (not in code blocks)
+		const lastHrIndex = this.findLastHorizontalRule(bodyContent);
+
+		// Step 3: Truncate if found
+		if (lastHrIndex !== -1) {
+			bodyContent = bodyContent.slice(0, lastHrIndex).trimEnd();
+		}
+
+		return frontmatter + bodyContent;
+	}
+
+	private findLastHorizontalRule(content: string): number {
+		// Find all potential '---' occurrences that are valid horizontal rules
+		// A valid horizontal rule is '---' on its own line, not inside code blocks
+
+		const lines = content.split(/\r?\n/);
+		let inCodeBlock = false;
+		let lastHrLineIndex = -1;
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i].trim();
+
+			// Track code block boundaries (both ``` and ~~~ style)
+			if (line.startsWith('```') || line.startsWith('~~~')) {
+				inCodeBlock = !inCodeBlock;
+				continue;
+			}
+
+			// Skip if we're inside a code block
+			if (inCodeBlock) {
+				continue;
+			}
+
+			// Check if this line is a horizontal rule
+			// Valid horizontal rule: exactly '---' (possibly with trailing spaces)
+			if (line === '---' || line.match(/^---\s*$/)) {
+				lastHrLineIndex = i;
+			}
+		}
+
+		// Convert line index back to character index
+		if (lastHrLineIndex === -1) {
+			return -1;
+		}
+
+		// Calculate character position of the start of the line
+		let charIndex = 0;
+		for (let i = 0; i < lastHrLineIndex; i++) {
+			charIndex += lines[i].length + 1; // +1 for the newline character
+		}
+
+		return charIndex;
 	}
 }

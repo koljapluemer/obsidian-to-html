@@ -4,6 +4,7 @@ export interface HtmlExportSettings {
 	indexPage: string;
 	templateNote: string;
 	onlyIncludeNotesContaining: string;
+	excludeLastHorizontalRule: boolean;
 }
 
 export const DEFAULT_SETTINGS: HtmlExportSettings = {
@@ -11,5 +12,6 @@ export const DEFAULT_SETTINGS: HtmlExportSettings = {
 	includePatterns: '**/*.md',
 	indexPage: '',
 	templateNote: '',
-	onlyIncludeNotesContaining: ''
+	onlyIncludeNotesContaining: '',
+	excludeLastHorizontalRule: false
 };
