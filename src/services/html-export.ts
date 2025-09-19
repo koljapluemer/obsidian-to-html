@@ -64,8 +64,8 @@ export class HtmlExportService {
 			// Build link mappings for all files that will be exported
 			this.linkResolver.buildPathMappings(allExportFiles);
 
-			// Collect and copy all image assets
-			await this.copyImageAssets(allExportFiles);
+			// Collect and copy all media assets (images, video, ...)
+			await this.copyMediaAssets(allExportFiles);
 
 			let exportedCount = 0;
 
@@ -170,22 +170,22 @@ export class HtmlExportService {
 		}
 	}
 
-	private async copyImageAssets(files: TFile[]): Promise<void> {
+	private async copyMediaAssets(files: TFile[]): Promise<void> {
 		try {
-			const allImageFiles = new Set<TFile>();
+			const allMediaFiles = new Set<TFile>();
 
-			// Collect all image references from all markdown files
+			// Collect all media references from all markdown files
 			for (const file of files) {
 				const content = await this.app.vault.read(file);
-				const imageRefs = this.linkResolver.getAllImageReferences(content, file.path);
+				const mediaRefs = this.linkResolver.getAllMediaReferences(content, file.path);
 
-				for (const imageFile of imageRefs) {
-					allImageFiles.add(imageFile);
+				for (const mediaFile of mediaRefs) {
+					allMediaFiles.add(mediaFile);
 				}
 			}
 
-			if (allImageFiles.size === 0) {
-				return; // No images to copy
+			if (allMediaFiles.size === 0) {
+				return; // No media to copy
 			}
 
 			// Create assets directory
@@ -194,21 +194,21 @@ export class HtmlExportService {
 				mkdirSync(assetsDir, { recursive: true });
 			}
 
-			// Copy each image file
-			for (const imageFile of allImageFiles) {
-				const sourceBuffer = await this.app.vault.readBinary(imageFile);
-				const targetPath = join(assetsDir, imageFile.name);
+			// Copy each media file
+			for (const mediaFile of allMediaFiles) {
+				const sourceBuffer = await this.app.vault.readBinary(mediaFile);
+				const targetPath = join(assetsDir, mediaFile.name);
 
 				// Write binary data to target location
 				writeFileSync(targetPath, Buffer.from(sourceBuffer));
 			}
 
-			if (allImageFiles.size > 0) {
-				console.log(`Copied ${allImageFiles.size} image assets to ${assetsDir}`);
+			if (allMediaFiles.size > 0) {
+				console.log(`Copied ${allMediaFiles.size} media assets to ${assetsDir}`);
 			}
 
 		} catch (error) {
-			throw new Error(`Error copying image assets: ${(error as Error).message}`);
+			throw new Error(`Error copying media assets: ${(error as Error).message}`);
 		}
 	}
 }

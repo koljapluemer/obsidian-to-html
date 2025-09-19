@@ -6,6 +6,8 @@ export class LinkResolver {
 	private pathToSlugMap: Map<string, string> = new Map();
 	private slugToPathMap: Map<string, string> = new Map();
 	private exportedFiles: Set<string> = new Set();
+	private readonly imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif'];
+	private readonly videoExtensions = ['.mp4', '.webm', '.mov', '.m4v', '.ogg'];
 
 	constructor(app: App) {
 		this.app = app;
@@ -58,8 +60,8 @@ export class LinkResolver {
 
 	// Convert internal links and images in markdown content BEFORE rendering
 	processLinksInMarkdown(markdownContent: string, sourcePath: string): string {
-		// First, process image embeds: ![[image.jpg]] or ![[image.jpg|width]] or ![[image.jpg|alt|width]]
-		let processedContent = this.processImagesInMarkdown(markdownContent, sourcePath);
+		// First, process media embeds: ![[image.jpg]] or ![[video.mp4|width]] etc.
+		let processedContent = this.processMediaEmbedsInMarkdown(markdownContent, sourcePath);
 
 		// Then process text links: [[link]] or [[link|display text]]
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
@@ -100,59 +102,60 @@ export class LinkResolver {
 		});
 	}
 
-	// Process image embeds in markdown content
-	processImagesInMarkdown(markdownContent: string, sourcePath: string): string {
-		// Match Obsidian image embeds: ![[image.jpg]] or ![[image.jpg|params]]
-		const imageRegex = /!\[\[([^\]]+)\]\]/g;
+	// Process media embeds in markdown content (images & videos)
+	processMediaEmbedsInMarkdown(markdownContent: string, sourcePath: string): string {
+		const embedRegex = /!\[\[([^\]]+)\]\]/g;
 
-		return markdownContent.replace(imageRegex, (match, imageContent) => {
-			const parts = imageContent.split('|').map((p: string) => p.trim());
-			const imagePath = parts[0];
+		return markdownContent.replace(embedRegex, (_match, embedContent) => {
+			const parts = embedContent.split('|').map((p: string) => p.trim());
+			const targetPath = parts[0];
 
-			// Parse parameters: can be width-only, alt-only, or alt|width
-			let altText = '';
-			let width: number | undefined;
+			const { altText, width } = this.parseEmbedParameters(parts.slice(1));
+			const resolved = this.resolveMediaPath(targetPath, sourcePath);
 
-			if (parts.length > 1) {
-				for (let i = 1; i < parts.length; i++) {
-					const param = parts[i];
-					// Check if parameter is a number (width)
-					const numParam = parseInt(param);
-					if (!isNaN(numParam) && numParam > 0) {
-						width = numParam;
-					} else {
-						// Treat as alt text
-						altText = param;
-					}
+			if (resolved) {
+				if (resolved.type === 'image') {
+					return this.generateImageHtml(resolved.file, sourcePath, width, altText);
+				}
+
+				if (resolved.type === 'video') {
+					return this.generateVideoHtml(resolved.file, sourcePath, width, altText);
 				}
 			}
 
-			// Resolve the image file
-			const imageFile = this.resolveImagePath(imagePath, sourcePath);
-
-			if (imageFile) {
-				return this.generateImageHtml(imageFile, sourcePath, width, altText);
-			}
-
-			// If image can't be resolved, return broken image placeholder
-			return `<span class="broken-image" title="Image not found: ${imagePath}">🖼️ ${imagePath}</span>`;
+			const fallbackType = this.getExtensionType(targetPath);
+			const icon = fallbackType === 'video' ? '🎞️' : '🖼️';
+			const cssClass = fallbackType === 'video' ? 'broken-video' : 'broken-image';
+			return `<span class="${cssClass}" title="Media not found: ${targetPath}">${icon} ${targetPath}</span>`;
 		});
 	}
 
-	// Resolve image path to actual file
-	resolveImagePath(imagePath: string, sourcePath: string): TFile | null {
-		// Use Obsidian's API to resolve the image path
-		const imageFile = this.app.metadataCache.getFirstLinkpathDest(imagePath, sourcePath);
+	private parseEmbedParameters(params: string[]): { altText: string; width?: number } {
+		let altText = '';
+		let width: number | undefined;
 
-		if (imageFile instanceof TFile) {
-			// Check if it's actually an image file
-			const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif'];
-			const hasImageExt = imageExtensions.some(ext =>
-				imageFile.path.toLowerCase().endsWith(ext)
-			);
+		for (const param of params) {
+			const numParam = parseInt(param);
+			if (!isNaN(numParam) && numParam > 0) {
+				width = numParam;
+			} else if (param.length > 0) {
+				altText = param;
+			}
+		}
 
-			if (hasImageExt) {
-				return imageFile;
+		return { altText, width };
+	}
+
+	private resolveMediaPath(mediaPath: string, sourcePath: string): { file: TFile; type: 'image' | 'video' } | null {
+		const file = this.app.metadataCache.getFirstLinkpathDest(mediaPath, sourcePath);
+
+		if (file instanceof TFile) {
+			const lowerPath = file.path.toLowerCase();
+			if (this.imageExtensions.some(ext => lowerPath.endsWith(ext))) {
+				return { file, type: 'image' };
+			}
+			if (this.videoExtensions.some(ext => lowerPath.endsWith(ext))) {
+				return { file, type: 'video' };
 			}
 		}
 
@@ -161,42 +164,81 @@ export class LinkResolver {
 
 	// Generate HTML for an image
 	generateImageHtml(imageFile: TFile, sourcePath: string, width?: number, altText?: string): string {
-		// Create relative path to the image in the assets folder
 		const imageName = imageFile.name;
 		const relativeImagePath = this.getRelativePath(sourcePath, `assets/${imageName}`);
-
-		// Use provided alt text or fall back to filename without extension
 		const alt = altText || imageFile.basename;
 
-		// Build the img tag
-		let imgTag = `<img src="${relativeImagePath}" alt="${alt}"`;
-
-		// Add width styling if specified
+		const attributes = [`src="${relativeImagePath}"`, `alt="${alt}"`];
 		if (width && width > 0) {
-			imgTag += ` style="width: ${width}px;"`;
+			attributes.push(`style="width: ${width}px;"`);
 		}
 
-		imgTag += '>';
-
-		return imgTag;
+		return `<img ${attributes.join(' ')}>`;
 	}
 
-	// Get all image references from markdown content
-	getAllImageReferences(markdownContent: string, sourcePath: string): TFile[] {
-		const imageRegex = /!\[\[([^\]]+)\]\]/g;
-		const imageFiles: TFile[] = [];
+	private generateVideoHtml(videoFile: TFile, sourcePath: string, width?: number, titleText?: string): string {
+		const videoName = videoFile.name;
+		const relativeVideoPath = this.getRelativePath(sourcePath, `assets/${videoName}`);
+		const attributes = ['controls'];
+
+		if (titleText) {
+			attributes.push(`title="${titleText}"`);
+		}
+
+		if (width && width > 0) {
+			attributes.push(`style="width: ${width}px;"`);
+		}
+
+		const mimeType = this.getVideoMimeType(videoName);
+		const sources = `<source src="${relativeVideoPath}"${mimeType ? ` type="${mimeType}"` : ''}>`;
+
+		return `<video ${attributes.join(' ')}>${sources}Your browser does not support the video tag.</video>`;
+	}
+
+	private getVideoMimeType(fileName: string): string | undefined {
+		const lower = fileName.toLowerCase();
+		if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) {
+			return 'video/mp4';
+		}
+		if (lower.endsWith('.webm')) {
+			return 'video/webm';
+		}
+		if (lower.endsWith('.mov')) {
+			return 'video/quicktime';
+		}
+		if (lower.endsWith('.ogg')) {
+			return 'video/ogg';
+		}
+		return undefined;
+	}
+
+	private getExtensionType(path: string): 'image' | 'video' | null {
+		const lower = path.toLowerCase();
+		if (this.imageExtensions.some(ext => lower.endsWith(ext))) {
+			return 'image';
+		}
+		if (this.videoExtensions.some(ext => lower.endsWith(ext))) {
+			return 'video';
+		}
+		return null;
+	}
+
+	// Get all media references from markdown content
+	getAllMediaReferences(markdownContent: string, sourcePath: string): TFile[] {
+		const embedRegex = /!\[\[([^\]]+)\]\]/g;
+		const mediaFiles: TFile[] = [];
 		let match;
 
-		while ((match = imageRegex.exec(markdownContent)) !== null) {
-			const imagePath = match[1].split('|')[0].trim();
-			const imageFile = this.resolveImagePath(imagePath, sourcePath);
+		while ((match = embedRegex.exec(markdownContent)) !== null) {
+			const targetPath = match[1].split('|')[0].trim();
+			const resolved = this.resolveMediaPath(targetPath, sourcePath);
 
-			if (imageFile && !imageFiles.some(f => f.path === imageFile.path)) {
-				imageFiles.push(imageFile);
+			if (resolved && !mediaFiles.some(f => f.path === resolved.file.path)) {
+				mediaFiles.push(resolved.file);
 			}
 		}
 
-		return imageFiles;
+		return mediaFiles;
 	}
 
 	// Post-process HTML to convert broken link anchors to styled spans

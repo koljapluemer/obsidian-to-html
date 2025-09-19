@@ -1,13 +1,13 @@
 # Obsidian to HTML
 
-Export your Obsidian vault to static HTML files with full image support and link resolution.
+Export your Obsidian vault to static HTML files with embedded media (images & video) support and link resolution.
 
 ## Features
 
 - Export selected notes using glob patterns
-- Convert `![[image.jpg]]` to proper HTML with width support (`![[image.jpg|400]]`)
+- Convert `![[image.jpg]]` and `![[video.mp4]]` to proper HTML with width support (`![[media|400]]`)
 - Convert `[[note links]]` to relative HTML links
-- Copy only referenced images to output
+- Copy only referenced media (images & video) to output
 - Customizable HTML templates using Handlebars
 - GitHub Pages ready output
 
@@ -27,6 +27,8 @@ Export your Obsidian vault to static HTML files with full image support and link
    - Set include patterns (e.g., `posts/**/*.md`, `public/**/*.md`)
    - Optionally set index page
 3. **Export**: Run command "Export vault to HTML"
+
+**Tip**: To verify media export, create a note with both an image embed (`![[image.png|Alt text|300]]`) and a video embed (`![[clip.mp4|640]]`), then use "Export vault to HTML" and open the generated HTML to confirm the image renders and the video plays with controls.
 
 ## GitHub Pages Deployment
 
@@ -71,7 +73,7 @@ git push origin main
 
 ## Troubleshooting
 
-**Images not loading**: Open exported HTML files in a web browser, not in Obsidian. For local testing, use a simple HTTP server:
+**Images or videos not loading**: Open exported HTML files in a web browser, not in Obsidian. For local testing, use a simple HTTP server:
 ```bash
 cd /path/to/export
 python -m http.server 8000
