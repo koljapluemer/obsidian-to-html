@@ -32,7 +32,6 @@ export class TemplateService {
         <h1>{{note.title}}</h1>
     </header>
     <main>
-        hellow?
         {{{note.content}}}
     </main>
 </body>
