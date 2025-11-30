@@ -318,7 +318,10 @@ export class HtmlExportService {
 
 	private processLastHorizontalRuleExclusion(content: string): string {
 		// Step 1: Detect and extract frontmatter
-		const frontmatterMatch = content.match(/^---\r?\n(.*?)\r?\n---\r?\n/s);
+		const frontmatterMatch = content.match(
+			/^---\r?\n([\s\S]*?)\r?\n---\r?\n/
+		);
+
 		let frontmatter = '';
 		let bodyContent = content;
 
