@@ -148,8 +148,11 @@ export class HtmlExportService {
 				? this.processLastHorizontalRuleExclusion(content)
 				: content;
 
+			// Preserve visual indentation for tab-indented wikilink lines without triggering code blocks
+			const indentSafeContent = this.preserveTabIndentedWikilinks(processedContent);
+
 			// Process internal links in the raw markdown BEFORE rendering
-			const processedMarkdown = this.linkResolver.processLinksInMarkdown(processedContent, file.path);
+			const processedMarkdown = this.linkResolver.processLinksInMarkdown(indentSafeContent, file.path);
 
 			// Create a temporary div for rendering
 			const tempDiv = document.createElement('div');
@@ -202,6 +205,36 @@ export class HtmlExportService {
 		} catch (error) {
 			throw new Error(`Error exporting file ${file.path}: ${(error as Error).message}`);
 		}
+	}
+
+	private preserveTabIndentedWikilinks(markdown: string): string {
+		// Replace leading tabs with visible non-breaking spaces on wikilink lines to avoid code block rendering
+		const lines = markdown.split(/\r?\n/);
+		let inCodeBlock = false;
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+
+			if (line.trimStart().startsWith('```') || line.trimStart().startsWith('~~~')) {
+				inCodeBlock = !inCodeBlock;
+				continue;
+			}
+
+			if (inCodeBlock) {
+				continue;
+			}
+
+			const match = line.match(/^(\t+)(\[\[.*)/);
+			if (!match) {
+				continue;
+			}
+
+			const tabCount = match[1].length;
+			const nbspIndent = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(tabCount);
+			lines[i] = `${nbspIndent}${match[2]}`;
+		}
+
+		return lines.join('\n');
 	}
 
 	private removeNewTabTargets(container: HTMLElement): void {
